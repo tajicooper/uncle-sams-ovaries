@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>UNCLE SAM'S OVARIES</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet"/>
+<style>
+/* ===================== RESET & BASE ===================== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#000}
+body{font-family:'Press Start 2P',monospace;cursor:none}
+
+/* ===================== CUSTOM CURSOR ===================== */
+#cursor{position:fixed;width:16px;height:16px;background:#ff2d78;pointer-events:none;z-index:99999;
+  image-rendering:pixelated;box-shadow:0 0 8px #ff2d78,0 0 20px #ff2d78;transition:transform .05s}
+#cursor.clicking{transform:scale(1.8);background:#fff}
+
+/* ===================== CANVAS / GAME LAYER ===================== */
+#gameCanvas{display:block;width:100vw;height:100vh;image-rendering:pixelated}
+
+/* ===================== UI OVERLAY ===================== */
+#ui{position:fixed;inset:0;pointer-events:none;z-index:10}
+
+/* ===================== SCREENS ===================== */
+.screen{
+  position:fixed;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  background:#000;z-index:50;transition:opacity .4s;
+}
+.screen.hidden{opacity:0;pointer-events:none}
+.screen.gone{display:none}
+
+/* scanlines over every screen */
+.screen::after{
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:100;
+  background:repeating-linear-gradient(to bottom,transparent 0px,transparent 3px,rgba(0,0,0,.35) 3px,rgba(0,0,0,.35) 4px);
+}
+
+/* ===================== TITLE SCREEN ===================== */
+#titleScreen{background:radial-gradient(ellipse at center, #1a0028 0%, #000 70%)}
+
+.title-scanline{position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,45,120,.03) 2px,rgba(255,45,120,.03) 4px)}
+
+.title-stars{position:absolute;inset:0;overflow:hidden}
+.tstar{position:absolute;width:4px;height:4px;background:#ff2d78;animation:tstar-blink var(--d,1s) step-end infinite var(--del,0s)}
+@keyframes tstar-blink{0%,49%{opacity:.8}50%,100%{opacity:0}}
+
+.title-top{font-size:clamp(8px,2vw,13px);color:#ff80b5;letter-spacing:3px;margin-bottom:8px;text-align:center;
+  animation:flicker 4s step-end infinite}
+@keyframes flicker{0%,95%,97%{opacity:1}96%,98%{opacity:.3}}
+
+.title-main{display:flex;flex-direction:column;align-items:center;margin-bottom:4px;text-align:center}
+.title-word1{font-size:clamp(20px,6vw,52px);color:#fff;text-shadow:0 0 20px #ff2d78,0 0 40px #ff2d78,0 0 80px #ff2d78;
+  letter-spacing:4px;animation:glow-pulse 2s ease-in-out infinite}
+.title-word2{font-size:clamp(28px,9vw,78px);color:#ff2d78;
+  text-shadow:0 0 30px #ff2d78,0 0 60px #ff2d78,0 0 100px #ff2d78,4px 4px 0 #8b0038;
+  letter-spacing:6px;animation:glow-pulse 2s ease-in-out infinite .3s;margin-top:-4px}
+.title-word3{font-size:clamp(14px,4vw,32px);color:#ff80b5;letter-spacing:8px;margin-top:4px}
+@keyframes glow-pulse{0%,100%{text-shadow:0 0 20px #ff2d78,0 0 40px #ff2d78,4px 4px 0 #8b0038}
+  50%{text-shadow:0 0 40px #ff2d78,0 0 80px #ff2d78,0 0 120px #ff80b5,4px 4px 0 #8b0038}}
+
+/* THE CLICKABLE UTERUS */
+#titleUterus{
+  position:relative;margin:24px 0 20px;cursor:pointer!important;pointer-events:all;
+  filter:drop-shadow(0 0 20px #ff2d78) drop-shadow(0 0 40px #ff2d78);
+  animation:uterus-bob 2s ease-in-out infinite;
+  transition:filter .1s,transform .1s;
+}
+#titleUterus:hover{
+  filter:drop-shadow(0 0 30px #fff) drop-shadow(0 0 60px #ff2d78);
+  transform:scale(1.05);animation-play-state:paused
+}
+#titleUterus:active{transform:scale(.95)}
+@keyframes uterus-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+
+/* pixel rings pulse around uterus */
+.uterus-ring{
+  position:absolute;top:50%;left:50%;
+  border:3px solid #ff2d78;border-radius:50%;
+  transform:translate(-50%,-50%) scale(0);
+  animation:ring-expand 2s ease-out infinite;
+  pointer-events:none;
+}
+.uterus-ring:nth-child(2){animation-delay:.6s}
+.uterus-ring:nth-child(3){animation-delay:1.2s}
+@keyframes ring-expand{
+  0%{width:60px;height:60px;opacity:.8;transform:translate(-50%,-50%) scale(.5)}
+  100%{width:200px;height:200px;opacity:0;transform:translate(-50%,-50%) scale(1)}
+}
+
+.insert-coin{
+  font-size:clamp(9px,2vw,14px);color:#ffe600;letter-spacing:3px;
+  text-shadow:0 0 10px #ffe600;animation:blink 1s step-end infinite;pointer-events:none
+}
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+
+.title-credits{
+  position:absolute;bottom:20px;font-size:clamp(6px,1.2vw,9px);color:#660033;letter-spacing:2px;
+}
+.title-hi-scores{
+  display:flex;gap:40px;margin-top:10px;font-size:clamp(7px,1.5vw,10px);color:#ff80b5
+}
+.hi-score span{color:#ffe600}
+
+/* ===================== GAME MAP SCREEN ===================== */
+#mapScreen{background:#0a0010;pointer-events:all}
+
+.map-header{
+  position:absolute;top:0;left:0;right:0;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:10px 20px;border-bottom:3px solid #ff2d78;
+  background:rgba(0,0,0,.8);z-index:10;flex-wrap:wrap;gap:8px
+}
+.map-title{font-size:clamp(7px,1.8vw,11px);color:#ff2d78;text-shadow:0 0 8px #ff2d78}
+.map-lives{font-size:clamp(6px,1.5vw,9px);color:#ff80b5;display:flex;align-items:center;gap:8px}
+.life-icon{color:#ff2d78;font-size:14px;text-shadow:0 0 6px #ff2d78}
+
+.map-canvas-wrap{
+  width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  padding-top:60px;
+}
+
+/* map grid */
+#mapGrid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:clamp(10px,2vw,24px);
+  padding:clamp(10px,2vw,24px);
+  max-width:900px;width:100%;
+}
+
+.map-room{
+  border:4px solid #ff2d78;background:#0f0020;
+  padding:clamp(12px,2.5vw,24px);
+  cursor:pointer!important;pointer-events:all;
+  position:relative;overflow:hidden;
+  box-shadow:4px 4px 0 #000,inset 0 0 20px rgba(255,45,120,.1);
+  transition:all .1s steps(2);
+  text-align:center;
+  min-height:clamp(100px,18vh,160px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+}
+.map-room:hover{
+  background:#1a0035;
+  box-shadow:6px 6px 0 #000,0 0 30px #ff2d78,inset 0 0 30px rgba(255,45,120,.2);
+  transform:translate(-3px,-3px);border-color:#ff80b5
+}
+.map-room:active{transform:translate(2px,2px);box-shadow:2px 2px 0 #000}
+.map-room.locked{border-color:#330020;cursor:not-allowed!important;opacity:.5}
+.map-room.locked:hover{transform:none;box-shadow:4px 4px 0 #000;background:#0f0020}
+
+.room-icon{font-size:clamp(20px,4vw,36px);line-height:1;filter:drop-shadow(0 0 8px #ff2d78)}
+.room-num{position:absolute;top:6px;left:8px;font-size:clamp(6px,1.2vw,9px);color:#330020}
+.room-name{font-size:clamp(6px,1.3vw,9px);color:#ff2d78;line-height:1.8;letter-spacing:1px}
+.room-sub{font-size:clamp(5px,1vw,7px);color:#66004d;line-height:1.6}
+.room-new{position:absolute;top:6px;right:6px;font-size:6px;color:#ffe600;
+  background:#000;border:2px solid #ffe600;padding:2px 4px;animation:blink 1s step-end infinite}
+
+/* flicker scanline on map */
+#mapScreen::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:5;
+  background:repeating-linear-gradient(to bottom,transparent 0px,transparent 3px,rgba(0,0,0,.2) 3px,rgba(0,0,0,.2) 4px)}
+
+/* ===================== CONTENT SCREEN ===================== */
+#contentScreen{
+  background:#000;pointer-events:all;
+  flex-direction:column;justify-content:flex-start;overflow-y:auto;
+}
+
+.content-header{
+  position:sticky;top:0;width:100%;z-index:20;
+  background:rgba(0,0,0,.95);border-bottom:3px solid #ff2d78;
+  display:flex;align-items:center;gap:12px;padding:10px 16px;
+  flex-shrink:0;
+}
+.back-btn{
+  background:#ff2d78;color:#000;border:none;
+  font-family:'Press Start 2P',monospace;
+  font-size:clamp(7px,1.4vw,9px);padding:8px 12px;cursor:pointer;
+  box-shadow:3px 3px 0 #000;pointer-events:all;flex-shrink:0;
+}
+.back-btn:hover{background:#ff80b5;transform:translate(-1px,-1px);box-shadow:4px 4px 0 #000}
+.back-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
+.content-hdr-title{font-size:clamp(8px,1.8vw,12px);color:#ff2d78;text-shadow:0 0 8px #ff2d78;flex:1}
+.content-hdr-icon{font-size:20px}
+
+.content-body{
+  width:100%;max-width:900px;margin:0 auto;
+  padding:clamp(20px,4vw,48px) clamp(16px,3vw,40px);
+  min-height:calc(100vh - 60px);
+}
+
+/* ===================== CONTENT STYLES ===================== */
+.c-title{
+  font-size:clamp(12px,3vw,22px);color:#ff2d78;margin-bottom:24px;
+  text-shadow:0 0 16px #ff2d78;line-height:1.8;letter-spacing:2px;border-bottom:3px solid #ff2d78;
+  padding-bottom:16px
+}
+.c-mission{
+  background:#0f0020;border:3px solid #ff2d78;padding:20px;margin-bottom:32px;
+  font-size:clamp(7px,1.4vw,9px);line-height:2.4;color:#f0e6ff;
+  box-shadow:4px 4px 0 #000,inset 0 0 20px rgba(255,45,120,.08)
+}
+.c-label{font-size:clamp(6px,1.2vw,8px);color:#ff2d78;margin-bottom:10px;letter-spacing:2px}
+
+/* cards grid */
+.c-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:28px}
+.c-card{
+  background:#0f0020;border:3px solid #ff2d78;padding:20px;
+  box-shadow:4px 4px 0 #000;
+  transition:all .1s steps(2)
+}
+.c-card:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 #000,0 0 16px #ff2d78}
+.c-card-icon{font-size:28px;margin-bottom:12px}
+.c-card h3{font-size:clamp(7px,1.3vw,9px);color:#ff2d78;margin-bottom:12px;line-height:1.8}
+.c-card p{font-size:clamp(6px,1.1vw,8px);line-height:2.2;color:#d0b0cc}
+
+/* stats */
+.c-stats{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:28px}
+.c-stat{
+  flex:1 1 180px;background:#0f0020;border:3px solid #ff2d78;padding:20px;text-align:center;
+  box-shadow:4px 4px 0 #000
+}
+.c-stat-num{display:block;font-size:clamp(20px,4vw,36px);color:#ff2d78;
+  text-shadow:0 0 16px #ff2d78;margin-bottom:8px}
+.c-stat-lbl{font-size:clamp(6px,1.1vw,7px);line-height:2;color:#d0b0cc}
+
+/* columns */
+.c-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:28px}
+.c-col{background:#0f0020;border:3px solid #ff2d78;padding:20px;box-shadow:4px 4px 0 #000}
+.c-col h3{font-size:clamp(7px,1.3vw,9px);color:#ff2d78;margin-bottom:14px;line-height:1.8}
+.c-col p{font-size:clamp(6px,1.1vw,8px);line-height:2.2;color:#d0b0cc;margin-bottom:10px}
+
+/* blockquote */
+.c-quote{
+  border-left:6px solid #ff2d78;padding:20px 24px;margin:28px 0;
+  background:#0a0018;
+}
+.c-quote p{font-size:clamp(7px,1.3vw,9px);line-height:2.4;color:#f0e6ff;font-style:italic;margin-bottom:8px}
+.c-quote cite{font-size:clamp(6px,1.1vw,7px);color:#ff2d78}
+
+/* timeline */
+.c-timeline{display:flex;flex-direction:column;gap:0;margin-bottom:28px}
+.tl-item{
+  display:flex;gap:0;cursor:pointer;
+  border:3px solid #330020;margin-bottom:2px;
+  transition:all .1s steps(2)
+}
+.tl-item:hover,.tl-item.open{border-color:#ff2d78;background:#0f0020}
+.tl-year{
+  flex-shrink:0;width:clamp(70px,12vw,100px);background:#ff2d78;color:#000;
+  font-size:clamp(8px,1.6vw,11px);display:flex;align-items:center;justify-content:center;
+  padding:16px 8px;text-align:center;line-height:1.4
+}
+.tl-right{flex:1;padding:16px}
+.tl-name{font-size:clamp(7px,1.3vw,9px);color:#ff80b5;line-height:1.8;margin-bottom:4px}
+.tl-arrow{font-size:10px;color:#66004d;transition:transform .1s steps(2)}
+.tl-item.open .tl-arrow{transform:rotate(90deg)}
+.tl-detail{
+  display:none;padding:0 16px 16px;
+  font-size:clamp(6px,1.1vw,8px);line-height:2.4;color:#d0b0cc;border-top:2px solid #330020;margin-top:8px
+}
+.tl-item.open .tl-detail{display:block}
+
+/* quiz */
+.quiz-wrap{background:#0f0020;border:3px solid #ff2d78;padding:clamp(16px,3vw,28px);box-shadow:4px 4px 0 #000;max-width:680px;margin:0 auto}
+.q-progress-lbl{font-size:clamp(6px,1.2vw,8px);color:#66004d;margin-bottom:8px}
+.q-bar-wrap{height:8px;background:#000;border:2px solid #ff2d78;margin-bottom:24px}
+.q-bar-fill{height:100%;background:#ff2d78;transition:width .3s steps(4);box-shadow:0 0 8px #ff2d78}
+.q-question{font-size:clamp(8px,1.5vw,10px);color:#f0e6ff;line-height:2.2;margin-bottom:24px}
+.q-options{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.q-opt{
+  background:#000;border:3px solid #330020;color:#d0b0cc;
+  font-family:'Press Start 2P',monospace;font-size:clamp(6px,1.2vw,8px);
+  padding:clamp(10px,2vw,14px) 14px;cursor:pointer;text-align:left;line-height:2;
+  transition:all .1s steps(2)
+}
+.q-opt:hover{border-color:#ff2d78;color:#ff2d78;background:#0f0020;box-shadow:0 0 10px rgba(255,45,120,.3)}
+.q-opt.correct{border-color:#00ff88;color:#00ff88;background:rgba(0,255,136,.07)}
+.q-opt.wrong{border-color:#ff4444;color:#ff4444;background:rgba(255,68,68,.07)}
+.q-opt:disabled{cursor:not-allowed}
+.q-feedback{
+  font-size:clamp(6px,1.1vw,8px);line-height:2.2;padding:14px;border:2px solid;margin-bottom:14px;display:none
+}
+.q-feedback.show{display:block}
+.q-feedback.ok{border-color:#00ff88;color:#00ff88;background:rgba(0,255,136,.06)}
+.q-feedback.bad{border-color:#ff4444;color:#ff4444;background:rgba(255,68,68,.06)}
+.q-next{
+  background:#ff2d78;color:#000;border:none;font-family:'Press Start 2P',monospace;
+  font-size:clamp(7px,1.3vw,9px);padding:12px 20px;cursor:pointer;
+  box-shadow:4px 4px 0 #000;display:none
+}
+.q-next:hover{background:#ff80b5;transform:translate(-2px,-2px);box-shadow:6px 6px 0 #000}
+.q-results{text-align:center;padding:20px}
+.q-results-uterus{font-size:60px;color:#ff2d78;text-shadow:0 0 20px #ff2d78;display:block;margin-bottom:16px}
+.q-results-title{font-size:clamp(10px,2vw,14px);color:#ff2d78;margin-bottom:12px}
+.q-results-score{font-size:clamp(20px,4vw,36px);color:#ffe600;text-shadow:0 0 12px #ffe600;display:block;margin-bottom:12px}
+.q-results-msg{font-size:clamp(6px,1.2vw,8px);line-height:2.2;color:#d0b0cc;margin-bottom:20px}
+
+/* zines */
+.zine-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;margin-bottom:24px}
+.zine-card{
+  background:#0f0020;border:3px solid #ff2d78;padding:20px 14px;
+  text-align:center;cursor:pointer;box-shadow:4px 4px 0 #000;
+  text-decoration:none;display:block;color:#f0e6ff;
+  transition:all .1s steps(2)
+}
+.zine-card:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 #000,0 0 16px #ff2d78;border-color:#ff80b5}
+.zine-icon{font-size:36px;display:block;margin-bottom:10px;filter:drop-shadow(0 0 6px #ff2d78)}
+.zine-title{font-size:clamp(5px,1vw,7px);line-height:2;margin-bottom:8px;display:block}
+.zine-tag{font-size:clamp(5px,.9vw,6px);color:#ff2d78;border:2px solid #ff2d78;padding:2px 6px;display:inline-block}
+.zine-dl{font-size:clamp(5px,.9vw,6px);color:#00e5ff;margin-top:8px;display:block}
+.zine-note{background:#0f0020;border:3px solid #330020;padding:14px;font-size:clamp(6px,1.1vw,7px);
+  line-height:2;color:#66004d;text-align:center}
+
+/* community */
+.prompts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-bottom:32px}
+.prompt-card{background:#0f0020;border:3px solid #ff2d78;padding:20px;box-shadow:4px 4px 0 #000;
+  transition:all .1s steps(2)}
+.prompt-card:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 #000,0 0 14px #ff2d78}
+.prompt-num{display:block;font-size:clamp(16px,3vw,24px);color:#ff2d78;opacity:.3;margin-bottom:8px}
+.prompt-card h3{font-size:clamp(7px,1.3vw,9px);color:#ff2d78;margin-bottom:10px;line-height:1.8}
+.prompt-card p{font-size:clamp(6px,1.1vw,7px);line-height:2.2;color:#d0b0cc}
+
+.signup-box{background:#0f0020;border:3px solid #ff2d78;padding:clamp(16px,3vw,28px);
+  max-width:580px;margin:0 auto 32px;box-shadow:4px 4px 0 #000}
+.signup-box h3{font-size:clamp(8px,1.5vw,11px);color:#ff2d78;margin-bottom:10px}
+.signup-box>p{font-size:clamp(6px,1.1vw,7px);line-height:2;color:#66004d;margin-bottom:16px}
+.signup-form{display:flex;flex-direction:column;gap:10px}
+.signup-form input{
+  background:#000;border:3px solid #ff2d78;color:#f0e6ff;
+  font-family:'Press Start 2P',monospace;font-size:clamp(7px,1.3vw,8px);
+  padding:12px 14px;outline:none;letter-spacing:1px
+}
+.signup-form input::placeholder{color:#330020}
+.signup-form input:focus{box-shadow:0 0 12px rgba(255,45,120,.4)}
+.radio-group{border:2px solid #330020;padding:12px}
+.radio-lbl{font-size:clamp(6px,1.1vw,7px);color:#ff2d78;margin-bottom:8px;display:block}
+.radio-group label{
+  display:flex;align-items:center;gap:8px;font-size:clamp(6px,1.1vw,7px);
+  color:#d0b0cc;margin-bottom:6px;cursor:pointer
+}
+.radio-group input[type=checkbox]{accent-color:#ff2d78;width:14px;height:14px;cursor:pointer}
+.submit-btn{
+  background:#ff2d78;color:#000;border:none;font-family:'Press Start 2P',monospace;
+  font-size:clamp(7px,1.3vw,9px);padding:12px;cursor:pointer;
+  box-shadow:4px 4px 0 #000;margin-top:4px;width:100%
+}
+.submit-btn:hover{background:#ff80b5;transform:translate(-2px,-2px);box-shadow:6px 6px 0 #000}
+.confirm-box{
+  margin-top:14px;padding:16px;border:3px solid #00ff88;
+  background:rgba(0,255,136,.06);text-align:center;
+  font-size:clamp(7px,1.3vw,8px);color:#00ff88;display:none
+}
+
+.events-list{background:#0f0020;border:3px solid #ff2d78;padding:clamp(16px,3vw,24px);
+  max-width:680px;margin:0 auto;box-shadow:4px 4px 0 #000}
+.events-list h3{font-size:clamp(7px,1.5vw,10px);color:#ff2d78;margin-bottom:16px}
+.ev-item{display:flex;align-items:center;gap:10px;padding:12px 0;
+  border-bottom:2px solid #1a0030;flex-wrap:wrap}
+.ev-item:last-child{border-bottom:none}
+.ev-date{font-size:clamp(7px,1.3vw,9px);color:#ffe600;flex-shrink:0;min-width:55px}
+.ev-name{font-size:clamp(6px,1.1vw,7px);color:#f0e6ff;flex:1;line-height:2}
+.ev-tag{font-size:clamp(5px,1vw,6px);color:#00e5ff;border:2px solid #00e5ff;padding:2px 5px;flex-shrink:0}
+
+/* ===================== PIXEL BUTTON GENERIC ===================== */
+.px-btn{
+  background:#ff2d78;color:#000;border:none;font-family:'Press Start 2P',monospace;
+  font-size:clamp(7px,1.3vw,9px);padding:12px 20px;cursor:pointer;
+  box-shadow:4px 4px 0 #000;transition:all .1s steps(2);letter-spacing:1px
+}
+.px-btn:hover{background:#ff80b5;transform:translate(-2px,-2px);box-shadow:6px 6px 0 #000,0 0 14px #ff2d78}
+.px-btn:active{transform:translate(2px,2px);box-shadow:2px 2px 0 #000}
+.px-btn.ghost{background:transparent;color:#ff2d78;border:3px solid #ff2d78}
+.px-btn.ghost:hover{background:rgba(255,45,120,.1)}
+
+/* ===================== TRANSITION WIPE ===================== */
+#wipe{
+  position:fixed;inset:0;background:#ff2d78;z-index:200;
+  transform:scaleX(0);transform-origin:left;pointer-events:none;
+}
+#wipe.wipe-in{animation:wipe-in .3s steps(6) forwards}
+#wipe.wipe-out{animation:wipe-out .3s steps(6) forwards .1s}
+@keyframes wipe-in{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes wipe-out{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+
+/* ===================== RESPONSIVE ===================== */
+@media(max-width:600px){
+  #mapGrid{grid-template-columns:repeat(2,1fr)}
+  .title-hi-scores{flex-direction:column;gap:8px;align-items:center}
+}
+@media(max-width:380px){
+  #mapGrid{grid-template-columns:1fr}
+}
+
+/* scrollbar */
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:#000}
+::-webkit-scrollbar-thumb{background:#ff2d78}
+::selection{background:#ff2d78;color:#000}
+</style>
+</head>
+<body>
+
+<!-- Custom cursor -->
+<div id="cursor"></div>
+
+<!-- Wipe transition overlay -->
+<div id="wipe"></div>
+
+<!-- ============================================================
+     TITLE / ARCADE SCREEN
+     ============================================================ -->
+<div id="titleScreen" class="screen">
+  <div class="title-scanline"></div>
+  <div class="title-stars" id="titleStars"></div>
+
+  <p class="title-top">✦ HIGH SCORE: 999,999 ✦</p>
+
+  <div class="title-main">
+    <span class="title-word1">UNCLE SAM'S</span>
+    <span class="title-word2">OVARIES</span>
+    <span class="title-word3">A DIGITAL ARCHIVE</span>
+  </div>
+
+  <!-- Clickable uterus -->
+  <div id="titleUterus" role="button" tabindex="0" aria-label="Press to enter the archive">
+    <div class="uterus-ring"></div>
+    <div class="uterus-ring"></div>
+    <div class="uterus-ring"></div>
+    <svg width="160" height="144" viewBox="0 0 80 72" xmlns="http://www.w3.org/2000/svg" style="image-rendering:pixelated;display:block">
+      <!-- body -->
+      <rect x="20" y="24" width="40" height="28" fill="#ff2d78"/>
+      <!-- left horn -->
+      <rect x="8"  y="12" width="16" height="16" fill="#ff2d78"/>
+      <!-- right horn -->
+      <rect x="56" y="12" width="16" height="16" fill="#ff2d78"/>
+      <!-- left ovary -->
+      <rect x="0"  y="4"  width="12" height="12" fill="#ff80b5"/>
+      <!-- right ovary -->
+      <rect x="68" y="4"  width="12" height="12" fill="#ff80b5"/>
+      <!-- cervix -->
+      <rect x="32" y="52" width="16" height="12" fill="#ff2d78"/>
+      <!-- highlights -->
+      <rect x="28" y="28" width="4" height="4" fill="#ffb3d1"/>
+      <rect x="48" y="28" width="4" height="4" fill="#ffb3d1"/>
+      <!-- shadow detail -->
+      <rect x="20" y="44" width="40" height="4" fill="#c4005a"/>
+      <rect x="36" y="36" width="8"  height="4" fill="#c4005a"/>
+    </svg>
+  </div>
+
+  <p class="insert-coin">▶ &nbsp; CLICK UTERUS TO ENTER &nbsp; ◀</p>
+
+  <div class="title-hi-scores">
+    <div class="hi-score">LEVEL&nbsp;<span>07</span>&nbsp;UNLOCKED</div>
+    <div class="hi-score">PLAYERS&nbsp;<span>∞</span>&nbsp;JOINED</div>
+    <div class="hi-score">YEAR&nbsp;<span>2025</span></div>
+  </div>
+
+  <p class="title-credits">© REPRODUCTIVE JUSTICE COLLECTIVE — FREE TO SHARE</p>
+</div>
+
+
+<!-- ============================================================
+     MAP / WORLD SELECT SCREEN
+     ============================================================ -->
+<div id="mapScreen" class="screen hidden gone">
+  <div class="map-header">
+    <div class="map-title">⬥ SELECT YOUR LEVEL ⬥</div>
+    <div class="map-lives">
+      <span class="life-icon">♀</span>
+      <span class="life-icon">♀</span>
+      <span class="life-icon">♀</span>
+      <span>KNOWLEDGE: <span id="knowledgeScore">0</span> PTS</span>
+    </div>
+    <button class="back-btn" onclick="goToTitle()">◀ TITLE</button>
+  </div>
+
+  <div class="map-canvas-wrap">
+    <div id="mapGrid">
+
+      <div class="map-room" onclick="openRoom('home')" data-room="home">
+        <span class="room-num">00</span>
+        <span class="room-icon">🏠</span>
+        <span class="room-name">HOME BASE</span>
+        <span class="room-sub">Mission Statement</span>
+        <span class="room-new">START</span>
+      </div>
+
+      <div class="map-room" onclick="openRoom('timeline')" data-room="timeline">
+        <span class="room-num">01</span>
+        <span class="room-icon">📜</span>
+        <span class="room-name">HISTORY LEVEL</span>
+        <span class="room-sub">Interactive Timeline</span>
+      </div>
+
+      <div class="map-room" onclick="openRoom('muslim')" data-room="muslim">
+        <span class="room-num">02</span>
+        <span class="room-icon">🌙</span>
+        <span class="room-name">FAITH LEVEL</span>
+        <span class="room-sub">Muslim Women</span>
+      </div>
+
+      <div class="map-room" onclick="openRoom('antiblack')" data-room="antiblack">
+        <span class="room-num">03</span>
+        <span class="room-icon">✊</span>
+        <span class="room-name">ANTI-BLACKNESS</span>
+        <span class="room-sub">Healthcare Racism</span>
+      </div>
+
+      <div class="map-room" onclick="openRoom('quiz')" data-room="quiz">
+        <span class="room-num">04</span>
+        <span class="room-icon">🎮</span>
+        <span class="room-name">QUIZ STAGE</span>
+        <span class="room-sub">Myth vs. Fact</span>
+        <span class="room-new">PLAY</span>
+      </div>
+
+      <div class="map-room" onclick="openRoom('zines')" data-room="zines">
+        <span class="room-num">05</span>
+        <span class="room-icon">📚</span>
+        <span class="room-name">ZINE LIBRARY</span>
+        <span class="room-sub">Download Free Zines</span>
+      </div>
+
+      <div class="map-room" onclick="openRoom('community')" data-room="community">
+        <span class="room-num">06</span>
+        <span class="room-icon">🤝</span>
+        <span class="room-name">COMMUNITY HUB</span>
+        <span class="room-sub">Discussions + Events</span>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================================================
+     CONTENT SCREEN (all rooms render here)
+     ============================================================ -->
+<div id="contentScreen" class="screen hidden gone">
+  <div class="content-header">
+    <button class="back-btn" onclick="goToMap()">◀ MAP</button>
+    <span class="content-hdr-icon" id="contentIcon"></span>
+    <span class="content-hdr-title" id="contentTitle">LOADING...</span>
+  </div>
+  <div class="content-body" id="contentBody"></div>
+</div>
+
+
+<script>
+/* ================================================================
+   STATE
+   ================================================================ */
+let knowledgeScore = 0;
+let currentRoom    = null;
+
+/* ================================================================
+   CURSOR
+   ================================================================ */
+const cursor = document.getElementById('cursor');
+document.addEventListener('mousemove', e => {
+  cursor.style.left = (e.clientX - 8) + 'px';
+  cursor.style.top  = (e.clientY - 8) + 'px';
+});
+document.addEventListener('mousedown', () => cursor.classList.add('clicking'));
+document.addEventListener('mouseup',   () => cursor.classList.remove('clicking'));
+
+/* ================================================================
+   TITLE STARS
+   ================================================================ */
+(function(){
+  const c = document.getElementById('titleStars');
+  for(let i=0;i<80;i++){
+    const s = document.createElement('div');
+    s.className = 'tstar';
+    s.style.cssText = `left:${Math.random()*100}%;top:${Math.random()*100}%;
+      --d:${(.6+Math.random()*2.4).toFixed(1)}s;--del:${(Math.random()*3).toFixed(1)}s;
+      width:${[2,4,4,6][Math.floor(Math.random()*4)]}px;
+      height:${[2,4,4,6][Math.floor(Math.random()*4)]}px;`;
+    c.appendChild(s);
+  }
+})();
+
+/* ================================================================
+   WIPE TRANSITION
+   ================================================================ */
+function wipeTransition(cb){
+  const w = document.getElementById('wipe');
+  w.className = 'wipe-in';
+  setTimeout(()=>{
+    cb();
+    w.className = 'wipe-out';
+    setTimeout(()=>{ w.className='' }, 400);
+  }, 320);
+}
+
+/* ================================================================
+   SCREEN MANAGEMENT
+   ================================================================ */
+function showScreen(id){
+  ['titleScreen','mapScreen','contentScreen'].forEach(sid=>{
+    const el = document.getElementById(sid);
+    if(sid === id){
+      el.classList.remove('gone');
+      requestAnimationFrame(()=> el.classList.remove('hidden'));
+    } else {
+      el.classList.add('hidden');
+      setTimeout(()=> el.classList.add('gone'), 420);
+    }
+  });
+}
+
+/* ================================================================
+   NAVIGATION
+   ================================================================ */
+const titleUterus = document.getElementById('titleUterus');
+titleUterus.addEventListener('click', enterArchive);
+titleUterus.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' ') enterArchive(); });
+
+function enterArchive(){
+  wipeTransition(()=>{ showScreen('mapScreen'); });
+}
+
+function goToTitle(){
+  wipeTransition(()=>{ showScreen('titleScreen'); });
+}
+
+function goToMap(){
+  wipeTransition(()=>{ showScreen('mapScreen'); });
+}
+
+function updateScore(pts){
+  knowledgeScore += pts;
+  document.getElementById('knowledgeScore').textContent = knowledgeScore;
+}
+
+/* ================================================================
+   ROOM DATA
+   ================================================================ */
+const ROOMS = {
+
+  /* ---- HOME BASE ---- */
+  home:{
+    icon:'🏠', title:'HOME BASE — MISSION STATEMENT',
+    render(){return `
+      <div class="c-title">UNCLE SAM'S OVARIES<br>A Digital Archive of Reproductive Justice</div>
+      <svg width="100" height="90" viewBox="0 0 80 72" xmlns="http://www.w3.org/2000/svg"
+        style="image-rendering:pixelated;display:block;margin:0 auto 28px;
+          filter:drop-shadow(0 0 20px #ff2d78);animation:float 3s ease-in-out infinite">
+        <style>@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}</style>
+        <rect x="20" y="24" width="40" height="28" fill="#ff2d78"/>
+        <rect x="8"  y="12" width="16" height="16" fill="#ff2d78"/>
+        <rect x="56" y="12" width="16" height="16" fill="#ff2d78"/>
+        <rect x="0"  y="4"  width="12" height="12" fill="#ff80b5"/>
+        <rect x="68" y="4"  width="12" height="12" fill="#ff80b5"/>
+        <rect x="32" y="52" width="16" height="12" fill="#ff2d78"/>
+        <rect x="28" y="28" width="4"  height="4"  fill="#ffb3d1"/>
+        <rect x="48" y="28" width="4"  height="4"  fill="#ffb3d1"/>
+        <rect x="20" y="44" width="40" height="4"  fill="#c4005a"/>
+      </svg>
+      <div class="c-mission">
+        <p class="c-label">[ MISSION STATEMENT ]</p>
+        <p>This archive is a digital act of resistance. We explore the hidden and intentionally
+        forgotten history of reproductive healthcare in the United States — from the bodies of
+        enslaved Black women used as surgical experiments, to Native women sterilized by the
+        government, to the Puerto Rican women used as test subjects for the birth control pill.</p>
+        <br>
+        <p>We center the communities most harmed by reproductive oppression: Black women, Indigenous
+        women, Latinx women, Muslim women, disabled people, LGBTQ+ folks, and those living in poverty.</p>
+        <br>
+        <p>Reproductive justice is not just about the right to abortion. It is the human right to
+        not have children, to have children, and to parent children in safe and supportive communities.
+        Navigate the levels. Learn. Rage. Share.</p>
+      </div>
+      <div style="text-align:center;margin-top:24px">
+        <button class="px-btn" onclick="goToMap()">▶ SELECT LEVEL</button>
+      </div>
+    `}
+  },
+
+  /* ---- HISTORY TIMELINE ---- */
+  timeline:{
+    icon:'📜', title:'HISTORY LEVEL — INTERACTIVE TIMELINE',
+    render(){
+      const events = [
+        {
+          year:'1845–49',
+          name:'J. Marion Sims & Enslaved Women',
+          detail:`J. Marion Sims — known as the "father of modern gynecology" — developed surgical techniques
+          to repair obstetric fistulas by performing repeated operations on enslaved Black women in Alabama,
+          including a woman named Anarcha who underwent at least 30 surgeries without anesthesia.
+          These experiments were built on the racist myth that Black people felt less pain.
+          The women could not consent. Sims' techniques became foundational to modern gynecology —
+          a fact that remains deeply contested and painful. This history is not an anomaly; it reflects
+          a pattern of using Black bodies as raw material for white medical advancement.`
+        },
+        {
+          year:'1907+',
+          name:'Eugenics Laws & Forced Sterilization',
+          detail:`Indiana became the first U.S. state to pass a compulsory sterilization law in 1907.
+          By the 1930s, over 30 states had similar laws. More than 60,000 Americans were forcibly
+          sterilized. Targets were overwhelmingly poor, disabled, immigrant, Black, Indigenous,
+          and Latinx people. The 1927 Supreme Court case Buck v. Bell upheld compulsory sterilization —
+          a ruling never formally overturned. American eugenics programs directly inspired Nazi Germany's
+          racial hygiene laws, a connection postwar U.S. history largely suppressed.`
+        },
+        {
+          year:'1956–57',
+          name:'Puerto Rico Birth Control Trials',
+          detail:`The first large-scale clinical trials of the hormonal birth control pill were conducted
+          on poor women in Puerto Rico without full informed consent about side effects or the
+          experimental nature of the drug. Researchers knew the dosage was dangerously high.
+          Three women died; their deaths were not formally investigated. Puerto Rico was chosen because
+          U.S. federal law prohibited these trial conditions stateside and because Puerto Rican
+          women were considered expendable. The pill was FDA-approved in 1960 — celebrated as a triumph
+          without acknowledging those who bore its cost.`
+        },
+        {
+          year:'1970s',
+          name:'Sterilization of Native American Women',
+          detail:`The Indian Health Service (IHS) sterilized thousands of Native American women during
+          the 1970s, often through coercion or deception. A 1976 GAO investigation found at least
+          3,406 Native women sterilized without proper consent between 1973–1976 — likely a vast
+          undercount. Women were told sterilization was reversible, or that welfare and child custody
+          depended on compliance. This decimated entire generations of Native families and constitutes
+          a form of genocide under the UN definition.`
+        },
+        {
+          year:'1973',
+          name:'Roe v. Wade — A Partial Victory',
+          detail:`The Supreme Court's decision established a constitutional right to abortion before
+          fetal viability. Reproductive justice activists note it focused on individual privacy
+          rather than systemic barriers. The Hyde Amendment (1976) immediately barred Medicaid
+          funding for abortion — ensuring the right existed in law but not in practice for millions
+          of poor women, disproportionately women of color. In June 2022, the Supreme Court overturned
+          Roe in Dobbs v. Jackson, eliminating the federal constitutional right to abortion.`
+        },
+        {
+          year:'1994',
+          name:'Birth of Reproductive Justice Framework',
+          detail:`In 1994, a group of Black women activists in Chicago coined the term "reproductive justice"
+          to articulate a framework beyond pro-choice language. Rooted in human rights, it asserts three
+          core rights: the right NOT to have children, the right TO have children, and the right to parent
+          children in safe and supportive communities. Led by SisterSong and scholars like Loretta Ross,
+          the framework transformed the movement and remains its foundation today.`
+        },
+        {
+          year:'2020s',
+          name:'Modern Maternal Mortality Crisis',
+          detail:`The U.S. has the highest maternal mortality rate of any wealthy nation.
+          Black women are 3–4 times more likely to die from pregnancy-related causes than white women
+          regardless of income or education. The CDC estimates over half of these deaths are preventable.
+          Causes are structural: implicit bias, undertreated pain, delayed diagnoses.
+          Activists are fighting for federally funded doula programs, mandatory implicit bias training,
+          and the Black Maternal Health Momnibus Act.`
+        }
+      ];
+      return `
+        <div class="c-title">HISTORY TIMELINE</div>
+        <p style="font-size:clamp(6px,1.2vw,8px);color:#66004d;margin-bottom:20px;line-height:2">
+          CLICK ANY ROW TO EXPAND THE FULL STORY ▼</p>
+        <div class="c-timeline" id="tlContainer">
+          ${events.map((ev,i)=>`
+            <div class="tl-item" onclick="toggleTL(this)" data-i="${i}">
+              <div class="tl-year">${ev.year}</div>
+              <div class="tl-right">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span class="tl-name">${ev.name}</span>
+                  <span class="tl-arrow">▶</span>
+                </div>
+                <div class="tl-detail">${ev.detail}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+  },
+
+  /* ---- MUSLIM WOMEN ---- */
+  muslim:{
+    icon:'🌙', title:'FAITH LEVEL — MUSLIM WOMEN & REPRODUCTIVE HEALTH',
+    render(){return `
+      <div class="c-title">MUSLIM WOMEN &amp; REPRODUCTIVE HEALTH</div>
+      <div class="c-grid">
+        <div class="c-card">
+          <div class="c-card-icon">🕌</div>
+          <h3>CULTURAL STIGMA</h3>
+          <p>Reproductive health is often taboo in many Muslim communities, leaving women without
+          accurate information about their bodies, menstrual health, contraception, and pregnancy.
+          Shame-based silence creates dangerous gaps in healthcare literacy and leaves women isolated
+          when they need support most.</p>
+        </div>
+        <div class="c-card">
+          <div class="c-card-icon">🏥</div>
+          <h3>HEALTHCARE ACCESS</h3>
+          <p>Muslim women — particularly those who wear hijab or niqab — frequently report discrimination
+          from healthcare providers, leading to delayed or avoided care. Islamophobia in clinical
+          settings compounds existing socioeconomic and geographic barriers to access, creating
+          a compounding crisis of neglect.</p>
+        </div>
+        <div class="c-card">
+          <div class="c-card-icon">📖</div>
+          <h3>RELIGIOUS NUANCE</h3>
+          <p>Islamic scholarship holds diverse views on contraception, abortion, and fertility. Many scholars
+          permit contraception and allow abortion under specific circumstances — nuances rarely communicated
+          within communities or by outside healthcare providers who assume homogeneity in Muslim belief
+          and practice.</p>
+        </div>
+        <div class="c-card">
+          <div class="c-card-icon">🤝</div>
+          <h3>COMMUNITY-LED SOLUTIONS</h3>
+          <p>Muslim-led reproductive health organizations are building culturally competent resources,
+          training imams and community leaders, and creating safe spaces for accurate, non-judgmental
+          reproductive health information. Community trust and religious literacy are essential to
+          effective care.</p>
+        </div>
+      </div>
+      <div class="c-quote">
+        <p>"Reproductive justice means nothing if it does not center the most marginalized —
+        including Muslim women who face the intersection of gender, faith, and systemic racism."</p>
+        <cite>— Community Educator, Detroit</cite>
+      </div>
+      <div class="c-cols">
+        <div class="c-col">
+          <h3>INTERSECTING OPPRESSIONS</h3>
+          <p>Muslim women of color — Black Muslim women, South Asian Muslim women, Arab Muslim women —
+          face the compounding effects of racism, sexism, Islamophobia, and poverty simultaneously.</p>
+          <p>The reproductive justice framework, created by Black women, is uniquely equipped to
+          hold these intersecting identities and the complex healthcare inequities they produce.</p>
+        </div>
+        <div class="c-col">
+          <h3>WHAT CHANGE LOOKS LIKE</h3>
+          <p>Healthcare providers need mandatory training in cultural humility and religious literacy.
+          Clinics need private prayer spaces, female providers on request, and translated materials.</p>
+          <p>Inside Muslim communities, reproductive health education needs to be destigmatized through
+          trusted messengers — including scholars, educators, and community health workers.</p>
+        </div>
+      </div>
+    `}
+  },
+
+  /* ---- ANTI-BLACKNESS ---- */
+  antiblack:{
+    icon:'✊', title:'LEVEL 03 — ANTI-BLACKNESS & HEALTHCARE',
+    render(){return `
+      <div class="c-title">ANTI-BLACKNESS &amp; HEALTHCARE</div>
+      <div class="c-stats">
+        <div class="c-stat">
+          <span class="c-stat-num">3–4×</span>
+          <span class="c-stat-lbl">More likely: Black women to die from pregnancy-related causes vs. white women (CDC)</span>
+        </div>
+        <div class="c-stat">
+          <span class="c-stat-num">55%</span>
+          <span class="c-stat-lbl">Of pregnancy-related deaths are preventable, per the CDC</span>
+        </div>
+        <div class="c-stat">
+          <span class="c-stat-num">40%</span>
+          <span class="c-stat-lbl">Of OB-GYNs reported their patients experiencing race-based discrimination</span>
+        </div>
+      </div>
+      <div class="c-cols">
+        <div class="c-col">
+          <h3>STRUCTURAL RACISM IN MEDICINE</h3>
+          <p>The U.S. healthcare system was built on — and continues to perpetuate — anti-Black racism.
+          Implicit bias among providers leads to Black patients' pain being systematically undertreated.</p>
+          <p>A widely cited myth that Black people have thicker skin or higher pain tolerance still
+          circulates in medical education, directly causing preventable deaths.</p>
+          <p>These biases translate into outcomes: symptoms dismissed, complications undetected,
+          lives lost that could have been saved with equitable care.</p>
+        </div>
+        <div class="c-col">
+          <h3>THE MATERNAL MORTALITY CRISIS</h3>
+          <p>The United States has one of the highest maternal mortality rates among wealthy nations.
+          Black women bear the brunt regardless of income or education level.</p>
+          <p>Serena Williams and Beyoncé have spoken publicly about nearly dying after childbirth
+          due to providers ignoring their concerns — showing that wealth and fame offer no protection
+          against anti-Black racism in medicine.</p>
+          <p>Advocates call for mandatory implicit bias training, doula programs, and federal legislation
+          to track and act on racial disparities in maternal health.</p>
+        </div>
+        <div class="c-col">
+          <h3>HISTORICAL ROOTS</h3>
+          <p>J. Marion Sims — the "father of modern gynecology" — developed surgical techniques by
+          operating on enslaved Black women without anesthesia, believing they did not feel pain.
+          This dehumanization became embedded in medical doctrine.</p>
+          <p>Recognizing and confronting this history is the first step. The second step is
+          dismantling the systems, myths, and incentive structures that continue to harm
+          Black women in every clinic in America today.</p>
+        </div>
+      </div>
+      <div class="c-quote">
+        <p>"Racism, not race, is the risk factor. The data is clear, the history is clear.
+        Now we need the political will to act."</p>
+        <cite>— Dr. Joia Crear-Perry, National Birth Equity Collaborative</cite>
+      </div>
+    `}
+  },
+
+  /* ---- QUIZ ---- */
+  quiz:{
+    icon:'🎮', title:'QUIZ STAGE — MYTH VS. FACT',
+    render(){
+      return `
+        <div class="c-title">REPRODUCTIVE JUSTICE<br>MYTH VS. FACT</div>
+        <div class="quiz-wrap" id="quizWrap">
+          <div id="qScreen">
+            <p class="q-progress-lbl" id="qLbl">QUESTION 1 OF 5</p>
+            <div class="q-bar-wrap"><div class="q-bar-fill" id="qBar" style="width:0%"></div></div>
+            <p class="q-question" id="qQ"></p>
+            <div class="q-options" id="qOpts"></div>
+            <div class="q-feedback" id="qFb"></div>
+            <button class="q-next" id="qNext" onclick="nextQuestion()">NEXT ▶</button>
+          </div>
+          <div id="qResults" style="display:none" class="q-results">
+            <span class="q-results-uterus">♀</span>
+            <p class="q-results-title" id="rTitle"></p>
+            <span class="q-results-score" id="rScore"></span>
+            <p class="q-results-msg" id="rMsg"></p>
+            <button class="px-btn" onclick="restartQuiz()">▶ PLAY AGAIN</button>
+          </div>
+        </div>
+      `;
+    }
+  },
+
+  /* ---- ZINES ---- */
+  zines:{
+    icon:'📚', title:'ZINE LIBRARY — FREE DOWNLOADS',
+    render(){
+      const zines=[
+        {icon:'📋',title:'THE ROOTS OF HARM: Medical Racism in U.S. History',tag:'HISTORY',pages:'12 pages'},
+        {icon:'🌙',title:'FAITH, BODY & CHOICE: A Guide for Muslim Women',tag:'FAITH',pages:'8 pages'},
+        {icon:'✊',title:'BLACK MATERNAL LIVES MATTER: What the Data Shows',tag:'DATA',pages:'16 pages'},
+        {icon:'🌎',title:'STOLEN FUTURES: Native Women & Forced Sterilization',tag:'HISTORY',pages:'10 pages'},
+        {icon:'💊',title:"PILL TRIALS & POWER: Puerto Rico's Untold Story",tag:'HISTORY',pages:'8 pages'},
+        {icon:'🤰',title:'KNOW YOUR RIGHTS: Pregnancy & Patient Advocacy',tag:'GUIDE',pages:'6 pages'},
+        {icon:'🧬',title:'EUGENICS: From History to Today',tag:'DEEP DIVE',pages:'20 pages'},
+        {icon:'📚',title:'REPRODUCTIVE JUSTICE 101: Start Here',tag:'INTRO',pages:'4 pages'},
+      ];
+      return `
+        <div class="c-title">ZINE LIBRARY</div>
+        <p style="font-size:clamp(6px,1.2vw,8px);color:#66004d;margin-bottom:20px;line-height:2">
+          ALL ZINES FREE TO DOWNLOAD, PRINT, AND SHARE ▼</p>
+        <div class="zine-grid">
+          ${zines.map(z=>`
+            <a href="#" class="zine-card" onclick="return false" aria-label="Download ${z.title}">
+              <span class="zine-icon">${z.icon}</span>
+              <span class="zine-title">${z.title}</span>
+              <span class="zine-tag">${z.tag}</span>
+              <span class="zine-dl">▼ ${z.pages} — FREE PDF</span>
+            </a>
+          `).join('')}
+        </div>
+        <div class="zine-note">
+          ★ Replace href="#" with real PDF URLs in the source code to enable downloads.<br>
+          Want to submit a zine? Join the Community Hub.
+        </div>
+      `;
+    }
+  },
+
+  /* ---- COMMUNITY ---- */
+  community:{
+    icon:'🤝', title:'COMMUNITY HUB — DISCUSSIONS & EVENTS',
+    render(){return `
+      <div class="c-title">COMMUNITY HUB</div>
+      <div class="prompts-grid">
+        <div class="prompt-card">
+          <span class="prompt-num">01</span>
+          <h3>HISTORICAL HARMS</h3>
+          <p>How do we reckon with the history of medical experimentation on marginalized communities,
+          and what does accountability look like in medicine today?</p>
+        </div>
+        <div class="prompt-card">
+          <span class="prompt-num">02</span>
+          <h3>FAITH & BODILY AUTONOMY</h3>
+          <p>How can Muslim communities create open, affirming conversations about reproductive
+          health within an Islamic framework — without shame or silence?</p>
+        </div>
+        <div class="prompt-card">
+          <span class="prompt-num">03</span>
+          <h3>SURVIVING THE SYSTEM</h3>
+          <p>What strategies do Black women and other marginalized patients use to navigate
+          a hostile healthcare system — and how do we move from survival to transformation?</p>
+        </div>
+        <div class="prompt-card">
+          <span class="prompt-num">04</span>
+          <h3>BUILDING ALTERNATIVES</h3>
+          <p>What do community-controlled, culturally competent reproductive health systems
+          look like — and how do we build them right now?</p>
+        </div>
+      </div>
+
+      <div class="signup-box">
+        <h3>▶ JOIN THE COMMUNITY</h3>
+        <p>Sign up for monthly virtual discussions and community events.</p>
+        <form class="signup-form" onsubmit="handleSignup(event)">
+          <input type="text" placeholder="YOUR NAME" required/>
+          <input type="email" placeholder="YOUR EMAIL" required/>
+          <div class="radio-group">
+            <span class="radio-lbl">I IDENTIFY AS:</span>
+            <label><input type="checkbox"> Black Woman</label>
+            <label><input type="checkbox"> Muslim Woman</label>
+            <label><input type="checkbox"> Indigenous Person</label>
+            <label><input type="checkbox"> Ally / Supporter</label>
+            <label><input type="checkbox"> Other / Prefer not to say</label>
+          </div>
+          <button type="submit" class="submit-btn">▶ REGISTER AS PLAYER</button>
+        </form>
+        <div class="confirm-box" id="signupConfirm">
+          ✔ PLAYER REGISTERED! We'll be in touch soon. +500 KNOWLEDGE PTS
+        </div>
+      </div>
+
+      <div class="events-list">
+        <h3>UPCOMING EVENTS</h3>
+        <div class="ev-item">
+          <span class="ev-date">APR 12</span>
+          <span class="ev-name">Virtual Discussion: Maternal Mortality &amp; Black Women's Voices</span>
+          <span class="ev-tag">ONLINE</span>
+        </div>
+        <div class="ev-item">
+          <span class="ev-date">APR 26</span>
+          <span class="ev-name">Zine-Making Workshop: Reproductive Justice Storytelling</span>
+          <span class="ev-tag">WORKSHOP</span>
+        </div>
+        <div class="ev-item">
+          <span class="ev-date">MAY 10</span>
+          <span class="ev-name">Faith &amp; Reproductive Justice: Muslim Women's Panel</span>
+          <span class="ev-tag">PANEL</span>
+        </div>
+        <div class="ev-item">
+          <span class="ev-date">MAY 24</span>
+          <span class="ev-name">Community Reading: Medical Apartheid by Harriet Washington</span>
+          <span class="ev-tag">READING</span>
+        </div>
+      </div>
+    `}
+  }
+};
+
+/* ================================================================
+   OPEN ROOM
+   ================================================================ */
+function openRoom(roomId){
+  const room = ROOMS[roomId];
+  if(!room) return;
+  currentRoom = roomId;
+
+  wipeTransition(()=>{
+    document.getElementById('contentIcon').textContent  = room.icon;
+    document.getElementById('contentTitle').textContent = room.title;
+    document.getElementById('contentBody').innerHTML    = room.render();
+    showScreen('contentScreen');
+    // Scroll content to top
+    document.getElementById('contentScreen').scrollTop = 0;
+
+    // Init quiz if needed
+    if(roomId === 'quiz') initQuiz();
+
+    // Add knowledge points for visiting
+    updateScore(100);
+  });
+}
+
+/* ================================================================
+   TIMELINE TOGGLE
+   ================================================================ */
+function toggleTL(el){
+  const isOpen = el.classList.contains('open');
+  document.querySelectorAll('.tl-item').forEach(i=>i.classList.remove('open'));
+  if(!isOpen) el.classList.add('open');
+}
+
+/* ================================================================
+   QUIZ ENGINE
+   ================================================================ */
+const QUESTIONS = [
+  {
+    q:'TRUE OR FALSE: J. Marion Sims performed surgical experiments on enslaved Black women without anesthesia.',
+    opts:['TRUE — historically documented.','FALSE — anesthesia was always used.','FALSE — he only worked with white women.','TRUE — but the women fully consented.'],
+    correct:0,
+    fb:'✔ FACT: Sims operated on enslaved women including Anarcha (30+ surgeries) without anesthesia, based on the racist myth that Black people felt less pain. Thoroughly documented by historians and medical ethicists.'
+  },
+  {
+    q:'Black maternal mortality rate compared to white women in the U.S. is approximately:',
+    opts:['The same across all races.','1.5× higher for Black women.','3–4× higher for Black women.','Slightly lower for Black women.'],
+    correct:2,
+    fb:'✔ FACT: Per the CDC, Black women are 3–4× more likely to die from pregnancy-related causes than white women — regardless of income or education. Driven by structural racism, not biology.'
+  },
+  {
+    q:'MYTH OR FACT: The first large-scale birth control pill trials were held in Puerto Rico without full informed consent.',
+    opts:['MYTH — all participants gave written consent.','FACT — held in Puerto Rico with minimal protections.','MYTH — trials happened in France.','FACT — but all women fully understood the risks.'],
+    correct:1,
+    fb:`✔ FACT: Trials were conducted in Puerto Rico in the 1950s. Women weren't informed of the experimental nature or risks. Three participants died without investigation. Puerto Rico was chosen because strict U.S. regulations didn't apply there.`
+  },
+  {
+    q:'The Reproductive Justice framework was created by:',
+    opts:['Planned Parenthood founders.','A group of Black women activists in 1994.','The Supreme Court in Roe v. Wade.','Margaret Sanger\'s eugenics movement.'],
+    correct:1,
+    fb:'✔ FACT: The term was coined in 1994 by Black women in Chicago, led by SisterSong and Loretta Ross. It centers three rights: not to have children, to have children, and to parent in safe communities.'
+  },
+  {
+    q:'Which agency was found to have sterilized thousands of Native American women in the 1970s without consent?',
+    opts:['Department of Defense.','Indian Health Service (IHS).','Centers for Disease Control (CDC).','Bureau of Indian Affairs.'],
+    correct:1,
+    fb:'✔ FACT: A 1976 GAO investigation found the IHS sterilized at least 3,406 Native women between 1973–1976 — likely a vast undercount. Women were coerced or deceived. This constitutes genocide under international law.'
+  }
+];
+
+let qCurrent=0, qScore=0, qAnswered=false;
+
+function initQuiz(){
+  qCurrent=0; qScore=0; qAnswered=false;
+  loadQuestion(0);
+}
+
+function loadQuestion(idx){
+  qAnswered = false;
+  const q = QUESTIONS[idx];
+  document.getElementById('qLbl').textContent = `QUESTION ${idx+1} OF ${QUESTIONS.length}`;
+  document.getElementById('qBar').style.width = ((idx/QUESTIONS.length)*100)+'%';
+  document.getElementById('qQ').textContent = q.q;
+  document.getElementById('qFb').className  = 'q-feedback';
+  document.getElementById('qFb').textContent= '';
+  document.getElementById('qNext').style.display = 'none';
+
+  const opts = document.getElementById('qOpts');
+  opts.innerHTML = '';
+  q.opts.forEach((opt,i)=>{
+    const btn = document.createElement('button');
+    btn.className   = 'q-opt';
+    btn.textContent = String.fromCharCode(65+i)+'. '+opt;
+    btn.onclick     = ()=> answerQ(i, btn);
+    opts.appendChild(btn);
+  });
+}
+
+function answerQ(sel, btn){
+  if(qAnswered) return;
+  qAnswered = true;
+  const q = QUESTIONS[qCurrent];
+  const ok= sel===q.correct;
+  if(ok){ qScore++; updateScore(200); }
+
+  document.querySelectorAll('.q-opt').forEach((b,i)=>{
+    b.disabled=true;
+    if(i===q.correct) b.classList.add('correct');
+    if(i===sel && !ok) b.classList.add('wrong');
+  });
+
+  const fb=document.getElementById('qFb');
+  fb.textContent=(ok?'':'✘ INCORRECT. ')+q.fb;
+  fb.className='q-feedback show '+(ok?'ok':'bad');
+  document.getElementById('qNext').style.display='block';
+  document.getElementById('qNext').textContent = qCurrent<QUESTIONS.length-1 ? 'NEXT ▶' : 'SEE RESULTS ▶';
+}
+
+function nextQuestion(){
+  qCurrent++;
+  if(qCurrent<QUESTIONS.length){ loadQuestion(qCurrent); }
+  else { showResults(); }
+}
+
+function showResults(){
+  document.getElementById('qBar').style.width='100%';
+  document.getElementById('qScreen').style.display='none';
+  document.getElementById('qResults').style.display='block';
+  const pct=(qScore/QUESTIONS.length)*100;
+  document.getElementById('rScore').textContent=`${qScore} / ${QUESTIONS.length}`;
+  if(pct===100){
+    document.getElementById('rTitle').textContent='PERFECT SCORE! ★';
+    document.getElementById('rMsg').textContent='You are a reproductive justice scholar. Share this knowledge — it saves lives.';
+  } else if(pct>=60){
+    document.getElementById('rTitle').textContent='LEVEL UP!';
+    document.getElementById('rMsg').textContent='Solid. Explore the archive, grab a zine, keep learning.';
+  } else {
+    document.getElementById('rTitle').textContent='GAME OVER — KEEP STUDYING';
+    document.getElementById('rMsg').textContent='This history is intentionally hidden. Browse the archive and try again.';
+  }
+}
+
+function restartQuiz(){
+  document.getElementById('qScreen').style.display='block';
+  document.getElementById('qResults').style.display='none';
+  initQuiz();
+}
+
+/* ================================================================
+   SIGNUP FORM
+   ================================================================ */
+function handleSignup(e){
+  e.preventDefault();
+  e.target.style.display='none';
+  const c=document.getElementById('signupConfirm');
+  c.style.display='block';
+  updateScore(500);
+}
+
+/* ================================================================
+   KEYBOARD NAV
+   ================================================================ */
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){
+    const cs = document.getElementById('contentScreen');
+    const ms = document.getElementById('mapScreen');
+    if(!cs.classList.contains('gone')) goToMap();
+    else if(!ms.classList.contains('gone')) goToTitle();
+  }
+});
+</script>
+</body>
+</html>
